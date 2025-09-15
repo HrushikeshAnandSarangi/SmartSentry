@@ -65,7 +65,7 @@ def insert_data(data):
     except (Exception, psycopg2.DatabaseError) as error:
         print(f"Database error: {error}")
     finally:
-        if conn is not nowne:
+        if conn is not None:
             conn.close()
 
 def main():
