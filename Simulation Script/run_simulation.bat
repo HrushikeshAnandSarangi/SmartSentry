@@ -1,4 +1,4 @@
 @echo off
-python ./main.py
+python ./simulation_script.py
 
 pause
