@@ -5,12 +5,10 @@ import paho.mqtt.client as mqtt
 # --- Configuration ---
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
-SUB_TOPIC = "sensors/raw_data"
-PUB_TOPIC = "alerts/anomaly"
+SUB_TOPIC = "sensors/raw_data"        # Topic for incoming raw data
+ENRICHED_TOPIC = "sensors/enriched_data" # Topic for data + phase
+PUB_TOPIC = "alerts/anomaly"          # Topic for anomaly alerts
 
-# --- Phase Identification Logic ---
-# This is a simple heuristic based on the operational settings in the CMAPSS dataset.
-# These thresholds might need tuning, but they are a good starting point.
 def identify_phase(data):
     """Identifies the operational phase based on sensor settings."""
     setting1 = data.get('setting_1', 0)
@@ -22,22 +20,12 @@ def identify_phase(data):
     else:
         return "steady_state"
 
-# --- Anomaly Detection Logic (Placeholder) ---
-# For now, this is a dummy function. We will replace this later
-# with real machine learning model predictions.
 def detect_anomaly(data, phase):
-    """
-    Placeholder for the anomaly detection model.
-    Loads a model based on the phase and returns True if an anomaly is detected.
-    """
+    """Placeholder for the anomaly detection model."""
     print(f"Analyzing for phase: {phase.upper()}. Loading '{phase}_model.pkl'...")
-    
-    # Dummy logic: 10% chance of flagging an anomaly for demonstration
-    is_anomaly = random.random() < 0.1 
-    
+    is_anomaly = random.random() < 0.1 # Dummy: 10% chance of anomaly
     return is_anomaly
 
-# --- MQTT Callbacks ---
 def on_connect(client, userdata, flags, rc, properties=None):
     """Callback for when the client connects."""
     if rc == 0:
@@ -55,12 +43,18 @@ def on_message(client, userdata, msg):
         # 1. Identify the operational phase
         phase = identify_phase(payload)
         
-        # 2. Detect anomalies for that phase
+        # 2. Enrich the payload with the phase
+        payload['phase'] = phase
+        
+        # 3. Publish the enriched data for the logger/dashboard
+        client.publish(ENRICHED_TOPIC, json.dumps(payload))
+        
+        # 4. Detect anomalies for that phase
         is_anomaly = detect_anomaly(payload, phase)
         
         print(f"Unit {payload['unit_number']} | Cycle {payload['time_in_cycles']} | Phase: {phase} | Anomaly: {is_anomaly}")
 
-        # 3. If an anomaly is found, publish an alert
+        # 5. If an anomaly is found, publish a separate alert
         if is_anomaly:
             alert_payload = {
                 "unit_number": payload['unit_number'],
@@ -77,6 +71,7 @@ def on_message(client, userdata, msg):
 
 def main():
     """Main function to set up MQTT client."""
+    # Use the new Callback API Version to avoid deprecation warnings
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_connect = on_connect
     client.on_message = on_message
