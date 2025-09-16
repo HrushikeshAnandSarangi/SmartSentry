@@ -2,36 +2,28 @@ import json
 import random
 import paho.mqtt.client as mqtt
 
-# --- Configuration ---
-MQTT_BROKER = "localhost"
+MQTT_BROKER = "mqtt-broker"
 MQTT_PORT = 1883
 SUB_TOPIC = "sensors/raw_data"
 ENRICHED_TOPIC = "sensors/enriched_data"
 PUB_TOPIC = "alerts/anomaly"
 
-# --- Model Placeholders ---
 def identify_phase(data):
-    """Identifies the operational phase based on sensor settings."""
     setting1 = data.get('setting_1', 0)
     if setting1 < 0.001: return "startup"
     elif setting1 > 0.002: return "shutdown"
     else: return "steady_state"
 
 def detect_anomaly(data, phase):
-    """Placeholder for the anomaly detection model."""
     print(f"Analyzing for phase: {phase.upper()}. Loading '{phase}_model.pkl'...")
-    return random.random() < 0.1 # Dummy: 10% chance of anomaly
+    return random.random() < 0.1 
 
-def predict_failure_type(data): # <-- NEW MODEL
-    """
-    Placeholder for a root cause analysis model.
-    Predicts the type of failure.
-    """
+def predict_failure_type(data): 
+
     print("Predicting failure type...")
     failures = ["HDC Failure", "Fan Failure", "Overheating", "Pressure Drop"]
     return random.choice(failures)
 
-# --- MQTT Callbacks ---
 def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         print("Engine connected to MQTT Broker!")
@@ -51,15 +43,14 @@ def on_message(client, userdata, msg):
         print(f"Unit {payload['unit_number']} | Cycle {payload['time_in_cycles']} | Phase: {phase} | Anomaly: {is_anomaly}")
 
         if is_anomaly:
-            # If an anomaly is found, also predict the failure type
-            failure_type = predict_failure_type(payload) # <-- CALL NEW MODEL
+            failure_type = predict_failure_type(payload) 
             
             alert_payload = {
                 "unit_number": payload['unit_number'],
                 "time_in_cycles": payload['time_in_cycles'],
                 "phase": phase,
                 "anomaly_detected": True,
-                "failure_type": failure_type, # <-- ADD TO PAYLOAD
+                "failure_type": failure_type, 
                 "original_data": payload 
             }
             client.publish(PUB_TOPIC, json.dumps(alert_payload))

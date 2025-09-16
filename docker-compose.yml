@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:14-alpine
+    container_name: postgres-db
+    environment:
+      - POSTGRES_USER=sentry_user
+      - POSTGRES_PASSWORD=your_password
+      - POSTGRES_DB=asset_data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentry_user -d asset_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  # The base service for all python scripts
+  sentry-app:
+    build: ./app
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
+    # This ensures the 'models' directory exists for the training script
+    volumes:
+      - ./app/models:/app/models
+
+  # Run the simulator from the sentry-app image
+  simulator:
+    extends: sentry-app
+    command: python3 simulator.py
+
+  # Run the engine from the sentry-app image
+  engine:
+    extends: sentry-app
+    command: python3 real_time_engine.py
+
+  # Run the logger from the sentry-app image
+  logger:
+    extends: sentry-app
+    command: python3 data_logger.py
+
+volumes:
+  postgres_data:
+  grafana_data:

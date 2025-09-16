@@ -3,12 +3,12 @@ import psycopg2
 import paho.mqtt.client as mqtt
 
 # --- Configuration ---
-MQTT_BROKER = "localhost"
+MQTT_BROKER = "mqtt-broker"
 MQTT_PORT = 1883
 SENSOR_TOPIC = "sensors/enriched_data"
 ALERT_TOPIC = "alerts/anomaly"
 
-DB_HOST = "localhost"
+DB_HOST = "postgres-db"
 DB_NAME = "asset_data"
 DB_USER = "sentry_user"
 DB_PASS = "your_password" # <-- IMPORTANT: Use your actual password
