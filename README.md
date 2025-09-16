@@ -14,8 +14,7 @@ A real-time monitoring system designed for the Baker Hughes Hackathon 2025. Smar
 * [Technology Stack](#technology-stack)
 * [Installation and Setup Guide](#installation-and-setup-guide)
 * [Edge Deployment Strategy](#edge-deployment-strategy)
-* [Project Structure](#project-structure)
-* [Team](#team)
+
 
 ---
 ## Project Overview
