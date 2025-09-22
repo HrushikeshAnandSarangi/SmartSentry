@@ -48,12 +48,12 @@ def load_models_and_scalers():
         ])
         
         # Load the pre-trained weights
-        model_path = os.path.join(MODELS_DIR, f"Pickle files/autoencoder_{phase}.h5")
+        model_path = os.path.join(MODELS_DIR, f"autoencoder_{phase}.h5")
         # The .h5 file contains the full model, so we load it directly.
         phase_models[phase] = tf.keras.models.load_model(model_path)
 
         # Load the corresponding scaler
-        scaler_path = os.path.join(MODELS_DIR, f"Pickle files/scaler_{phase}.pkl")
+        scaler_path = os.path.join(MODELS_DIR, f"scaler_{phase}.pkl")
         phase_scalers[phase] = joblib.load(scaler_path)
         
     print("✅ Models and scalers loaded successfully.")
