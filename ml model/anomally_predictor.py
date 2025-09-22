@@ -10,7 +10,6 @@ from tensorflow.keras import layers, models
 from sklearn.preprocessing import StandardScaler
 
 # --- MQTT Configuration ---
-# Set to 'localhost' for local testing, or the broker's hostname/IP
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 SUB_TOPIC = "sensors/raw_data"
@@ -22,8 +21,7 @@ PHASES = ['startup', 'steady', 'shutdown']
 phase_models = {}
 phase_scalers = {}
 
-# Anomaly thresholds calculated from the training notebook (mean + 3*std_dev of reconstruction error)
-# These are pre-calculated for efficiency in a streaming environment.
+# Anomaly thresholds calculated from the training notebook
 THRESHOLDS = {
     'startup': 0.50,
     'steady': 0.37,
@@ -38,12 +36,9 @@ def load_models_and_scalers():
     print("Loading phase-aware models and scalers...")
     for phase in PHASES:
         try:
-            # Load the pre-trained model directly from the current directory
             model_path = f"autoencoder_{phase}.h5"
-            # Use compile=False to avoid errors when loading models saved with a different Keras version
             phase_models[phase] = tf.keras.models.load_model(model_path, compile=False)
 
-            # Load the corresponding scaler
             scaler_path = f"scaler_{phase}.pkl"
             phase_scalers[phase] = joblib.load(scaler_path)
             
@@ -55,27 +50,20 @@ def load_models_and_scalers():
     print("✅ Models and scalers loaded successfully.")
 
 def identify_phase(data):
-    """
-    Identifies the operational phase based on the cycle number.
-    This is a heuristic adapted for streaming from the notebook's logic.
-    """
+    """Identifies the operational phase based on the cycle number."""
     cycle = data.get('time_in_cycles', 0)
     
-    # Heuristic based on typical cycle behavior observed in the training dataset
-    if cycle <= 40: # Early cycles
+    if cycle <= 40:
         return "startup"
-    elif cycle > 160: # Approaching end-of-life
+    elif cycle > 160:
         return "shutdown"
-    else: # Normal operational range
+    else:
         return "steady"
 
 def detect_anomaly(data, phase):
-    """
-    Detects anomalies using the appropriate phase-aware autoencoder.
-    """
+    """Detects anomalies using the appropriate phase-aware autoencoder."""
     print(f"Analyzing for phase: {phase.upper()}...")
     
-    # Select the correct model, scaler, and threshold for the current phase
     model = phase_models.get(phase)
     scaler = phase_scalers.get(phase)
     threshold = THRESHOLDS.get(phase)
@@ -85,17 +73,26 @@ def detect_anomaly(data, phase):
         return False
 
     try:
-        # Prepare the incoming data into a DataFrame with the correct column order
+        # Prepare a DataFrame with only the original feature columns
         input_df = pd.DataFrame([data])[FEATURE_COLS]
         
+        # *** FIX: Add dummy columns to match the scaler's expected input ***
+        # The scaler artifact was saved with 26 columns, so we match that structure.
+        input_df_for_scaler = input_df.copy()
+        input_df_for_scaler['recon_error'] = 0.0  # Dummy value
+        input_df_for_scaler['anomaly'] = False    # Dummy value
+
         # Scale the features using the phase-specific scaler
-        X_scaled = scaler.transform(input_df)
+        X_scaled_full = scaler.transform(input_df_for_scaler)
         
+        # Select only the first 24 feature columns for the model, as it was trained on these
+        X_scaled_model_input = X_scaled_full[:, :len(FEATURE_COLS)]
+
         # Get the reconstruction from the autoencoder
-        reconstruction = model.predict(X_scaled, verbose=0)
+        reconstruction = model.predict(X_scaled_model_input, verbose=0)
         
-        # Calculate the Mean Squared Error (reconstruction loss)
-        loss = np.mean(np.square(X_scaled - reconstruction), axis=1)[0]
+        # Calculate the Mean Squared Error (loss) against the original scaled features
+        loss = np.mean(np.square(X_scaled_model_input - reconstruction), axis=1)[0]
         
         print(f"Reconstruction Error: {loss:.4f} | Threshold: {threshold}")
         return loss > threshold
@@ -105,10 +102,7 @@ def detect_anomaly(data, phase):
         return False
 
 def predict_failure_type(data):
-    """
-    Placeholder for a failure type prediction model.
-    Currently returns a random failure type for demonstration.
-    """
+    """Placeholder for a failure type prediction model."""
     print("Predicting failure type...")
     failures = ["HDC Failure", "Fan Failure", "Overheating", "Pressure Drop"]
     return random.choice(failures)
@@ -127,20 +121,16 @@ def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
         
-        # Standardize keys to match notebook columns ('cycle' and 'engine_id')
         payload['time_in_cycles'] = payload.get('cycle', payload.get('time_in_cycles'))
         payload['unit_number'] = payload.get('engine_id', payload.get('unit_number'))
         
-        # 1. Identify the operational phase
         phase = identify_phase(payload)
         payload['phase'] = phase
         client.publish(ENRICHED_TOPIC, json.dumps(payload))
         
-        # 2. Detect anomalies using the phase-aware model
         is_anomaly = detect_anomaly(payload, phase)
         print(f"Unit {payload['unit_number']} | Cycle {payload['time_in_cycles']} | Phase: {phase} | Anomaly: {is_anomaly}")
 
-        # 3. If an anomaly is found, predict failure type and publish an alert
         if is_anomaly:
             failure_type = predict_failure_type(payload) 
             
@@ -160,12 +150,10 @@ def on_message(client, userdata, msg):
 
 def main():
     """Main function to initialize and run the MQTT client."""
-    # Check for one of the model files to ensure they exist before starting
     if not os.path.exists("autoencoder_steady.h5"):
         print("Error: Model files not found. Ensure .h5 and .pkl files are in the same directory as the script.")
         return
 
-    # Load models and scalers once at the start
     load_models_and_scalers()
     
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
