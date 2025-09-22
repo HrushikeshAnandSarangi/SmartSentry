@@ -9,7 +9,7 @@ MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensors/raw_data"
 DATA_DIR = "data"  # Directory containing the data files
-DATASETS = ["test_FD001", "test_FD002", "test_FD003", "test_FD004"]  # List of datasets to stream
+DATASETS = ["FD001", "FD002", "FD003", "FD004"]  # List of datasets to stream
 STREAM_INTERVAL = 0.5  # seconds
 
 # --- CMAPSS Dataset Column Names ---
@@ -41,7 +41,7 @@ def main():
         # Loop indefinitely to provide a continuous stream
         while True:
             for dataset_id in DATASETS:
-                data_file_path = os.path.join(DATA_DIR, f"train_{dataset_id}.txt")
+                data_file_path = os.path.join(DATA_DIR, f"test_{dataset_id}.txt")
                 
                 print(f"\n--- Loading data from {data_file_path} ---")
                 try:
