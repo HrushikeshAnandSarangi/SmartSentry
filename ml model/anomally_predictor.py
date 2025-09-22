@@ -27,11 +27,10 @@ THRESHOLDS = {
     'shutdown': 0.52
 }
 
-# --- FIX: Update feature columns to match the saved model's expected input (26 features) ---
 FEATURE_COLS = (
     ['setting_1', 'setting_2', 'setting_3'] + 
     [f'sensor_{i}' for i in range(1, 22)] + 
-    ['recon_error', 'anomaly'] # Add the two missing columns
+    ['recon_error', 'anomaly']
 )
 
 def load_models_and_scalers():
@@ -53,14 +52,18 @@ def load_models_and_scalers():
     print("✅ Models and scalers loaded successfully.")
 
 def identify_phase(data):
-    """Identifies the operational phase based on the cycle number."""
+    """
+    Identifies the operational phase based on the cycle number.
+    This is a refined heuristic adapted for streaming from the notebook's logic.
+    """
     cycle = data.get('time_in_cycles', 0)
     
-    if cycle <= 40:
+    # --- FIX: Refined heuristic based on typical cycle behavior ---
+    if cycle <= 30: # Early cycles are typically startup
         return "startup"
-    elif cycle > 160:
+    elif cycle > 175: # Later cycles are typically shutdown
         return "shutdown"
-    else:
+    else: # Normal operational range
         return "steady"
 
 def detect_anomaly(data, phase):
@@ -76,20 +79,14 @@ def detect_anomaly(data, phase):
         return False
 
     try:
-        # --- FIX: Add dummy values for the missing columns to the payload ---
         data['recon_error'] = 0.0
         data['anomaly'] = False
         
-        # Prepare the incoming data into a DataFrame with the correct 26 columns
         input_df = pd.DataFrame([data])[FEATURE_COLS]
-        
-        # Scale the features
         X_scaled = scaler.transform(input_df)
-        
-        # Get the reconstruction from the autoencoder (using all 26 features)
         reconstruction = model.predict(X_scaled, verbose=0)
         
-        # Calculate loss on the original 24 features only for a meaningful error score
+        # Calculate loss on the original 24 features only
         loss = np.mean(np.square(X_scaled[:, :24] - reconstruction[:, :24]), axis=1)[0]
         
         print(f"Reconstruction Error: {loss:.4f} | Threshold: {threshold}")
