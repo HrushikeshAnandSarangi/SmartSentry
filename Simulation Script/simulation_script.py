@@ -4,7 +4,7 @@ import pandas as pd
 import paho.mqtt.client as mqtt
 
 # --- Configuration ---
-MQTT_BROKER = "mqtt-broker"
+MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensors/raw_data"
 DATA_FILE = "data/train_FD001.txt"

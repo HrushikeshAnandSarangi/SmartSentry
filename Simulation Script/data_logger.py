@@ -3,7 +3,7 @@ import psycopg2
 import paho.mqtt.client as mqtt
 
 # --- Configuration ---
-MQTT_BROKER = "mqtt-broker"
+MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 SENSOR_TOPIC = "sensors/enriched_data"
 ALERT_TOPIC = "alerts/anomaly"
