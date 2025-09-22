@@ -21,15 +21,18 @@ PHASES = ['startup', 'steady', 'shutdown']
 phase_models = {}
 phase_scalers = {}
 
-# Anomaly thresholds calculated from the training notebook
 THRESHOLDS = {
     'startup': 0.50,
     'steady': 0.37,
     'shutdown': 0.52
 }
 
-# Feature columns the models were trained on
-FEATURE_COLS = ['setting_1', 'setting_2', 'setting_3'] + [f'sensor_{i}' for i in range(1, 22)]
+# --- FIX: Update feature columns to match the saved model's expected input (26 features) ---
+FEATURE_COLS = (
+    ['setting_1', 'setting_2', 'setting_3'] + 
+    [f'sensor_{i}' for i in range(1, 22)] + 
+    ['recon_error', 'anomaly'] # Add the two missing columns
+)
 
 def load_models_and_scalers():
     """Loads the autoencoder models and scalers for each phase from the current directory."""
@@ -73,26 +76,21 @@ def detect_anomaly(data, phase):
         return False
 
     try:
-        # Prepare a DataFrame with only the original feature columns
+        # --- FIX: Add dummy values for the missing columns to the payload ---
+        data['recon_error'] = 0.0
+        data['anomaly'] = False
+        
+        # Prepare the incoming data into a DataFrame with the correct 26 columns
         input_df = pd.DataFrame([data])[FEATURE_COLS]
         
-        # *** FIX: Add dummy columns to match the scaler's expected input ***
-        # The scaler artifact was saved with 26 columns, so we match that structure.
-        input_df_for_scaler = input_df.copy()
-        input_df_for_scaler['recon_error'] = 0.0  # Dummy value
-        input_df_for_scaler['anomaly'] = False    # Dummy value
-
-        # Scale the features using the phase-specific scaler
-        X_scaled_full = scaler.transform(input_df_for_scaler)
+        # Scale the features
+        X_scaled = scaler.transform(input_df)
         
-        # Select only the first 24 feature columns for the model, as it was trained on these
-        X_scaled_model_input = X_scaled_full[:, :len(FEATURE_COLS)]
-
-        # Get the reconstruction from the autoencoder
-        reconstruction = model.predict(X_scaled_model_input, verbose=0)
+        # Get the reconstruction from the autoencoder (using all 26 features)
+        reconstruction = model.predict(X_scaled, verbose=0)
         
-        # Calculate the Mean Squared Error (loss) against the original scaled features
-        loss = np.mean(np.square(X_scaled_model_input - reconstruction), axis=1)[0]
+        # Calculate loss on the original 24 features only for a meaningful error score
+        loss = np.mean(np.square(X_scaled[:, :24] - reconstruction[:, :24]), axis=1)[0]
         
         print(f"Reconstruction Error: {loss:.4f} | Threshold: {threshold}")
         return loss > threshold
