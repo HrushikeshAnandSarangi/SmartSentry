@@ -18,7 +18,7 @@ PUB_TOPIC = "alerts/anomaly"
 
 # --- Model and Data Configuration ---
 PHASES = ['startup', 'steady', 'shutdown']
-MODELS_DIR = "phase_models"
+MODELS_DIR = "ml model"
 phase_models = {}
 phase_scalers = {}
 
