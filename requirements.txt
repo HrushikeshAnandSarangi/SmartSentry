@@ -2,3 +2,9 @@ pandas
 scikit-learn
 paho-mqtt
 psycopg2-binary
+paho-mqtt
+joblib
+numpy
+pandas
+scikit-learn
+tensorflow
