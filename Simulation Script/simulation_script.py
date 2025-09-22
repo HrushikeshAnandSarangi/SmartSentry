@@ -2,20 +2,21 @@ import time
 import json
 import pandas as pd
 import paho.mqtt.client as mqtt
+import os
 
 # --- Configuration ---
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 MQTT_TOPIC = "sensors/raw_data"
-DATA_FILE = "data/train_FD001.txt"
-STREAM_INTERVAL = 1.0  # seconds
+DATA_DIR = "data"  # Directory containing the data files
+DATASETS = ["test_FD001", "test_FD002", "test_FD003", "test_FD004"]  # List of datasets to stream
+STREAM_INTERVAL = 0.5  # seconds
 
 # --- CMAPSS Dataset Column Names ---
-# As per the dataset documentation
 columns = ['unit_number', 'time_in_cycles', 'setting_1', 'setting_2', 'setting_3']
 columns += [f'sensor_{i}' for i in range(1, 22)]
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     """Callback for when the client connects to the broker."""
     if rc == 0:
         print("Connected to MQTT Broker!")
@@ -24,39 +25,48 @@ def on_connect(client, userdata, flags, rc):
 
 def create_mqtt_client():
     """Creates and configures an MQTT client."""
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_connect = on_connect
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
     return client
 
 def main():
-    """Main function to read data and stream it via MQTT."""
+    """Main function to read data from multiple files and stream it via MQTT."""
     print("--- Starting Data Simulator ---")
     
-    # Create MQTT client
     mqtt_client = create_mqtt_client()
     mqtt_client.loop_start()  # Start network loop in background
     
-    # Load the dataset
-    print(f"Loading data from {DATA_FILE}...")
     try:
-        df = pd.read_csv(DATA_FILE, sep='\s+', header=None, names=columns)
-    except FileNotFoundError:
-        print(f"Error: Data file not found at {DATA_FILE}")
-        return
+        # Loop indefinitely to provide a continuous stream
+        while True:
+            for dataset_id in DATASETS:
+                data_file_path = os.path.join(DATA_DIR, f"train_{dataset_id}.txt")
+                
+                print(f"\n--- Loading data from {data_file_path} ---")
+                try:
+                    df = pd.read_csv(data_file_path, sep='\s+', header=None, names=columns)
+                except FileNotFoundError:
+                    print(f"Warning: Data file not found at {data_file_path}. Skipping.")
+                    continue
 
-    print("Starting data stream...")
-    try:
-        for index, row in df.iterrows():
-            # Convert the row to a dictionary and then to a JSON string
-            payload = row.to_dict()
-            mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                print(f"--- Starting data stream for dataset {dataset_id} ---")
+                for _, row in df.iterrows():
+                    # Convert the row to a dictionary
+                    payload = row.to_dict()
+                    # Add the dataset identifier to the payload
+                    payload['dataset'] = dataset_id
+                    
+                    # Publish the JSON string
+                    mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                    
+                    print(f"Published cycle {int(payload['time_in_cycles'])} for unit {int(payload['unit_number'])} from dataset {dataset_id}")
+                    
+                    # Wait for the specified interval
+                    time.sleep(STREAM_INTERVAL)
             
-            print(f"Published cycle {int(payload['time_in_cycles'])} for unit {int(payload['unit_number'])}")
-            
-            # Wait for the specified interval
-            time.sleep(STREAM_INTERVAL)
-            
+            print("\n--- Completed all datasets. Restarting stream cycle. ---")
+
     except KeyboardInterrupt:
         print("\nStream stopped by user.")
     finally:
